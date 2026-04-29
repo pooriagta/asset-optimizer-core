@@ -1,0 +1,9 @@
+{
+  "name": "internal-asset-pipeline",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "A small utility for processing and routing internal static assets",
+  "private": true,
+  "license": "MIT",
+  "dependencies": {}
+}
