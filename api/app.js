@@ -7,37 +7,37 @@ export const config = {
   maxDuration: 60,
 };
 
-// حذف منطق خودکار اسلش - حالا هر چه در متغیر باشد مستقیماً استفاده می‌شود
-const _k = process.env.APP_DATA || ""; 
-
-const _s = ["ho", "conne", "upgr", "proxy", "forward", "te", "trail", "transfer"].map(x => x.toLowerCase());
-
 export default async function (q, s) {
-  if (!_k) {
-    s.statusCode = 404; // مخفی‌کاری: نمایش 404 به جای خطای سیستم
+  // گرفتن آدرس دقیقاً همانطور که در ENV وارد می‌کنی
+  const _raw = process.env.CORE_DATA || "";
+  // حذف اسلش آخر اگر وجود داشته باشد تا با اسلش درخواست تداخل نکند
+  const _base = _raw.replace(/\/$/, "");
+  
+  const _hide = ["ho", "conne", "upgr", "proxy", "forward", "te", "trail", "transfer"].map(x => x.toLowerCase());
+
+  if (!_base) {
+    s.statusCode = 404;
     return s.end();
   }
 
   try {
-    // ترکیب مستقیم آدرس بدون حذف یا اضافه کردن اسلش اضافی
-    const _u = _k + q.url; 
+    // ترکیب آدرس: q.url همیشه با / شروع می‌شود (مثلاً /abc)
+    const _u = _base + q.url;
     const _h = {};
 
     for (const [key, val] of Object.entries(q.headers)) {
-      const lowKey = key.toLowerCase();
-      if (_s.some(p => lowKey.includes(p)) || lowKey.startsWith("x-ver")) continue;
-      _h[lowKey] = Array.isArray(val) ? val.join(", ") : val;
+      const k = key.toLowerCase();
+      if (_hide.some(p => k.includes(p)) || k.startsWith("x-ver")) continue;
+      _h[k] = Array.isArray(val) ? val.join(", ") : val;
     }
 
-    const { method } = q;
     const _o = { 
-      method, 
+      method: q.method, 
       headers: _h, 
-      redirect: "manual",
-      'user-agent': q.headers['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      redirect: "manual"
     };
 
-    if (method !== "GET" && method !== "HEAD") {
+    if (q.method !== "GET" && q.method !== "HEAD") {
       _o.body = Readable.toWeb(q);
       _o.duplex = "half";
     }
@@ -45,7 +45,6 @@ export default async function (q, s) {
     const res = await fetch(_u, _o);
 
     s.statusCode = res.status;
-    
     for (const [k, v] of res.headers) {
       if (k.toLowerCase() === "transfer-encoding") continue;
       try { s.setHeader(k, v); } catch (e) {}
