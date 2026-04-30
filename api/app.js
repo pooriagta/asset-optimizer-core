@@ -7,56 +7,59 @@ export const config = {
   maxDuration: 60,
 };
 
-export default async function (q, s) {
-  // گرفتن آدرس دقیقاً همانطور که در ENV وارد می‌کنی
-  const _raw = process.env.CORE_DATA || "";
-  // حذف اسلش آخر اگر وجود داشته باشد تا با اسلش درخواست تداخل نکند
-  const _base = _raw.replace(/\/$/, "");
+export default async function (req, res) {
+  // مقدار DATABASE_URL را در پنل ورسل تنظیم کن
+  const _target = (process.env.DATABASE_URL || "").replace(/\/$/, "");
   
-  const _hide = ["ho", "conne", "upgr", "proxy", "forward", "te", "trail", "transfer"].map(x => x.toLowerCase());
-
-  if (!_base) {
-    s.statusCode = 404;
-    return s.end();
+  if (!_target) {
+    res.statusCode = 404;
+    return res.end();
   }
 
   try {
-    // ترکیب آدرس: q.url همیشه با / شروع می‌شود (مثلاً /abc)
-    const _u = _base + q.url;
-    const _h = {};
+    // ترکیب آدرس: ورودی ورسل + آدرس مقصد
+    const targetUrl = _target + req.url;
 
-    for (const [key, val] of Object.entries(q.headers)) {
+    const headers = {};
+    for (const [key, value] of Object.entries(req.headers)) {
       const k = key.toLowerCase();
-      if (_hide.some(p => k.includes(p)) || k.startsWith("x-ver")) continue;
-      _h[k] = Array.isArray(val) ? val.join(", ") : val;
+      // حذف هدرهایی که باعث اختلال در هدایت پورت می‌شوند
+      if (["host", "connection", "transfer-encoding", "upgrade", "te", "trailer"].includes(k)) continue;
+      if (k.startsWith("x-ver")) continue;
+      
+      headers[k] = Array.isArray(value) ? value.join(", ") : value;
     }
 
-    const _o = { 
-      method: q.method, 
-      headers: _h, 
-      redirect: "manual"
+    // اجباری کردن هدر Host مقصد برای عبور از فیلتر پورت
+    const targetHost = new URL(_target).host;
+    headers["host"] = targetHost;
+
+    const fetchOpts = {
+      method: req.method,
+      headers: headers,
+      redirect: "manual",
     };
 
-    if (q.method !== "GET" && q.method !== "HEAD") {
-      _o.body = Readable.toWeb(q);
-      _o.duplex = "half";
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      fetchOpts.body = Readable.toWeb(req);
+      fetchOpts.duplex = "half";
     }
 
-    const res = await fetch(_u, _o);
+    const upstream = await fetch(targetUrl, fetchOpts);
 
-    s.statusCode = res.status;
-    for (const [k, v] of res.headers) {
+    res.statusCode = upstream.status;
+    for (const [k, v] of upstream.headers) {
       if (k.toLowerCase() === "transfer-encoding") continue;
-      try { s.setHeader(k, v); } catch (e) {}
+      try { res.setHeader(k, v); } catch (e) {}
     }
 
-    if (res.body) {
-      await pipeline(Readable.fromWeb(res.body), s);
+    if (upstream.body) {
+      await pipeline(Readable.fromWeb(upstream.body), res);
     } else {
-      s.end();
+      res.end();
     }
   } catch (e) {
-    s.statusCode = 404;
-    s.end();
+    res.statusCode = 404;
+    res.end();
   }
 }
