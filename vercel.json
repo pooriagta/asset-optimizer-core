@@ -1,14 +1,6 @@
 {
   "version": 2,
-  "name": "asset-optimizer-core",
-  "functions": {
-    "api/app.js": {
-      "memory": 128,
-      "maxDuration": 60
-    }
-  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/api/app.js" }
-  ],
-  "trailingSlash": false
+  ]
 }
